@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { SuperValidated, Infer } from "sveltekit-superforms";
-  import type { SpaceSchema } from "$lib/schemas";
+  import type { SuperValidated } from "sveltekit-superforms";
+  import type { SpaceFormData } from "$lib/schemas";
   import AvailabilitySetter from "$lib/components/AvailabilitySetter.svelte";
   import ImageUploader from "$lib/components/ImageUploader.svelte";
   import { spaces } from "$lib/api";
   import { goto } from "$app/navigation";
   import { toast } from "$lib/toast.svelte";
   import { spaceSchema } from "$lib/schemas";
-  import { zod } from "sveltekit-superforms/adapters";
+  import { zod } from "$lib/superforms";
   import { superForm } from "sveltekit-superforms";
   import SuperDebug from "sveltekit-superforms";
   import ActionFormButtons from "$lib/components/ActionFormButtons.svelte";
@@ -16,17 +16,25 @@
     data,
     activeCalendarId,
     calendarDates,
-    userRole,
+    userRole = "",
   }: {
-    data: SuperValidated<Infer<SpaceSchema>>;
+    data: SuperValidated<SpaceFormData>;
     activeCalendarId: Hash;
     calendarDates: TimeSpan;
-    userRole: string;
+    userRole?: string;
   } = $props();
 
-  let alwaysAvailable: boolean = $state(data.data.availability === "always");
+  function initialAlwaysAvailable() {
+    return data.data.availability === "always";
+  }
 
-  const { form, errors, enhance } = superForm(data, {
+  function initialFormData() {
+    return data;
+  }
+
+  let alwaysAvailable: boolean = $state(initialAlwaysAvailable());
+
+  const { form, errors, enhance } = superForm(initialFormData(), {
     SPA: true,
     validators: zod(spaceSchema),
     resetForm: false,
@@ -262,36 +270,37 @@
   />
   {#if $errors.contact}<span class="form-error">{$errors.contact}</span>{/if}
 
-  <fieldset>
-    <legend>🔗 Useful link (website, social media)</legend>
-    <div class="flex flex-row">
-      <div>
-        <!-- TODO: Fix type issue with '$form.link' is possibly being 'null'. -->
-        <label for="space-link-text">Link Title</label>
-        <input
-          type="text"
-          name="space-link-text"
-          aria-invalid={$errors.link?.title ? "true" : undefined}
-          bind:value={$form.link.title}
-        />
-        {#if $errors.link?.title}<span class="form-error"
-            >{$errors.link?.title}</span
-          >{/if}
+  {#if $form.link}
+    <fieldset>
+      <legend>🔗 Useful link (website, social media)</legend>
+      <div class="flex flex-row">
+        <div>
+          <label for="space-link-text">Link Title</label>
+          <input
+            type="text"
+            name="space-link-text"
+            aria-invalid={$errors.link?.title ? "true" : undefined}
+            bind:value={$form.link.title}
+          />
+          {#if $errors.link?.title}<span class="form-error"
+              >{$errors.link?.title}</span
+            >{/if}
+        </div>
+        <div>
+          <label for="space-link-url">URL</label>
+          <input
+            type="url"
+            name="space-link-url"
+            aria-invalid={$errors.link?.url ? "true" : undefined}
+            bind:value={$form.link.url}
+          />
+          {#if $errors.link?.url}<span class="form-error"
+              >{$errors.link?.url}</span
+            >{/if}
+        </div>
       </div>
-      <div>
-        <label for="space-link-url">URL</label>
-        <input
-          type="url"
-          name="space-link-url"
-          aria-invalid={$errors.link?.url ? "true" : undefined}
-          bind:value={$form.link.url}
-        />
-        {#if $errors.link?.url}<span class="form-error"
-            >{$errors.link?.url}</span
-          >{/if}
-      </div>
-    </div>
-  </fieldset>
+    </fieldset>
+  {/if}
 
   <label for="space-message">Your message to anyone booking this space</label>
   <input
@@ -315,7 +324,7 @@
       {calendarDates}
     />
     {#if $errors.availability}
-      <span class="form-error">{$errors.availability._errors}</span>
+      <span class="form-error">{$errors.availability.join(", ")}</span>
     {/if}
   {/if}
 

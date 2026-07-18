@@ -61,7 +61,10 @@
       <AlertDialog.Title
         >Are you sure you want to delete {name}?</AlertDialog.Title
       >
-      <AlertDialog.Close class="button-alert-close" />
+      <AlertDialog.Cancel
+        class="button-alert-close"
+        aria-label="Close delete confirmation"
+      />
       <AlertDialog.Description>
         {#if type === "event"}
           <p>

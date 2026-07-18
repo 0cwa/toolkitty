@@ -22,8 +22,8 @@ HOW TO USE THE COMPONENT
   <Dialog.Content>
     <Dialog.Title></Dialog.Title>
     <Dialog.Description></Dialog.Description>
-    <Dialog.Close></Dialog.Close>
-    <Dialog.Close></Dialog.Close>
+    <Dialog.Cancel></Dialog.Cancel>
+    <Dialog.Action></Dialog.Action>
   </Dialog.Content>
 </Dialog.Root>
 */

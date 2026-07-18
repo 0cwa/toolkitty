@@ -10,9 +10,9 @@ import {
   STREAM,
 } from "$lib/utils/faker";
 import { seedTestMessages } from "./data";
+import { setupSeedTestIPC } from "./setup";
 import { auth, users } from "$lib/api";
 import { beforeAll, describe, expect, test } from "vitest";
-import { mockIPC } from "@tauri-apps/api/mocks";
 import {
   createCalendarFields,
   createEventFields,
@@ -20,13 +20,9 @@ import {
   createSpaceFields,
 } from "$lib/utils/faker";
 
-beforeAll(async () => {
-  mockIPC((cmd) => {
-    if (cmd === "public_key") {
-      return OWNER_PUBLIC_KEY;
-    }
-  });
+setupSeedTestIPC();
 
+beforeAll(async () => {
   for (const message of seedTestMessages()) {
     await processMessage(message);
   }
@@ -146,9 +142,9 @@ describe("non-owners cannot perform updates", () => {
                 end: "2025-03-01T17:00:00Z",
               },
             ],
-            calendarInstructions: null,
-            spacePageText: null,
-            resourcePageText: null,
+            calendarInstructions: "",
+            spacePageText: "",
+            resourcePageText: "",
           },
         },
       },

@@ -33,7 +33,7 @@
     <button
       type="button"
       class="bg-grey-light rounded-xl justify-center"
-      on:click={goBack}
+      onclick={goBack}
     >
       cancel
     </button>
@@ -41,14 +41,14 @@
     <button
       type="button"
       class="bg-grey-light rounded-xl justify-center"
-      on:click={goBack}
+      onclick={goBack}
     >
       discard
     </button>
     <button
       type="button"
       class="bg-grey-light rounded-xl justify-center"
-      on:click={onSaveDraft}
+      onclick={onSaveDraft}
     >
       save draft
     </button>

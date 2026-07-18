@@ -23,12 +23,18 @@
     onChange?: () => void;
     type: string;
   } = $props();
-  let availability: TimeSpan[] = Array.isArray(data.availability)
-    ? data.availability
-    : [];
+  let availability: TimeSpan[] = $derived(
+    Array.isArray(data.availability) ? data.availability : [],
+  );
   let availabilityByDay: TimeSpan | null = $state(null);
-  let selectedDate = selected ? fromDate(new Date(selected), "UTC") : undefined;
-  let currentlySelectedDate: DateValue | undefined = $state(selectedDate);
+
+  function initialSelectedDate() {
+    return selected ? fromDate(new Date(selected), "UTC") : undefined;
+  }
+
+  let currentlySelectedDate: DateValue | undefined = $state(
+    initialSelectedDate(),
+  );
   let booked: BookingRequest[] = $state([]);
   let loading: boolean = $state(true);
 
@@ -85,7 +91,7 @@
   }
 
   // Trigger a "dateSelect" event so that the initial UI shows availability.
-  handleDateSelect(selectedDate);
+  handleDateSelect(initialSelectedDate());
 </script>
 
 <!-- TODO: Refactor Calendar into one component as we are using in a few places now -->

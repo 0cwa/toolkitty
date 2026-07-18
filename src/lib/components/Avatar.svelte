@@ -13,24 +13,24 @@
 
   let kittyHealth: Health = $state("ok");
 
+  const avatar: Record<Health, { src: string; alt: string }> = {
+    sad: {
+      src: "/images/toolkitty-avatar-sad.png",
+      alt: "kitten sleeping next to toolkit box",
+    },
+    ok: {
+      src: "/images/toolkitty-avatar-ok.png",
+      alt: "kitten holding toolkit box",
+    },
+    happy: {
+      src: "/images/toolkitty-avatar-happy.png",
+      alt: "happy kitten sitting inside toolkit box",
+    },
+  };
+
   // TODO: get network status from backend and update avatar health state
 </script>
 
 <div class="w-10 h-full mx-auto">
-  {#if kittyHealth === "sad"}
-    <img
-      src="/images/toolkitty-avatar-sad.png"
-      alt="kitten sleeping next to toolkit box"
-    />
-  {:else if kittyHealth === "ok"}
-    <img
-      src="/images/toolkitty-avatar-ok.png"
-      alt="kitten holding toolkit box"
-    />
-  {:else if kittyHealth === "happy"}
-    <img
-      src="/images/toolkitty-avatar-happy.png"
-      alt="happy kitten sitting inside toolkit box"
-    />
-  {/if}
+  <img src={avatar[kittyHealth].src} alt={avatar[kittyHealth].alt} />
 </div>

@@ -6,7 +6,7 @@
     publicKey,
   }: { data: User | AccessRequest; publicKey?: PublicKey } = $props();
   let open = $state(false);
-  let isAccessRequest = (data as AccessRequest).from !== undefined;
+  let isAccessRequest = $derived((data as AccessRequest).from !== undefined);
 </script>
 
 <AlertDialog.Root bind:open>

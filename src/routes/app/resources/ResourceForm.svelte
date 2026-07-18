@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { SuperValidated, Infer } from "sveltekit-superforms";
-  import type { ResourceSchema } from "$lib/schemas";
+  import type { SuperValidated } from "sveltekit-superforms";
+  import type { ResourceFormData } from "$lib/schemas";
   import { superForm } from "sveltekit-superforms";
   import SuperDebug from "sveltekit-superforms";
   import ActionFormButtons from "$lib/components/ActionFormButtons.svelte";
@@ -8,7 +8,7 @@
   import ImageUploader from "$lib/components/ImageUploader.svelte";
   import { resources } from "$lib/api";
   import { resourceSchema } from "$lib/schemas";
-  import { zod } from "sveltekit-superforms/adapters";
+  import { zod } from "$lib/superforms";
   import { toast } from "$lib/toast.svelte";
   import { goto } from "$app/navigation";
 
@@ -16,16 +16,25 @@
     data,
     activeCalendarId,
     calendarDates,
-    userRole,
+    userRole = "",
   }: {
-    data: SuperValidated<Infer<ResourceSchema>>;
+    data: SuperValidated<ResourceFormData>;
     activeCalendarId: Hash;
     calendarDates: TimeSpan;
-    userRole: string;
+    userRole?: string;
   } = $props();
-  let alwaysAvailable: boolean = $state(data.data.availability === "always");
 
-  const { form, errors, enhance } = superForm(data, {
+  function initialAlwaysAvailable() {
+    return data.data.availability === "always";
+  }
+
+  function initialFormData() {
+    return data;
+  }
+
+  let alwaysAvailable: boolean = $state(initialAlwaysAvailable());
+
+  const { form, errors, enhance } = superForm(initialFormData(), {
     SPA: true,
     validators: zod(resourceSchema),
     resetForm: false,
@@ -110,34 +119,36 @@
   />
   {#if $errors.contact}<span class="form-error">{$errors.contact}</span>{/if}
 
-  <fieldset>
-    <legend>🔗 Useful link (website, social media)</legend>
-    <div class="flex flex-row">
-      <div>
-        <label for="link-text">Link Title</label>
-        <input
-          type="text"
-          name="title"
-          aria-invalid={$errors.link?.title ? "true" : undefined}
-          bind:value={$form.link.title}
-        />
+  {#if $form.link}
+    <fieldset>
+      <legend>🔗 Useful link (website, social media)</legend>
+      <div class="flex flex-row">
+        <div>
+          <label for="link-text">Link Title</label>
+          <input
+            type="text"
+            name="title"
+            aria-invalid={$errors.link?.title ? "true" : undefined}
+            bind:value={$form.link.title}
+          />
+        </div>
+        {#if $errors.link?.title}<span class="form-error"
+            >{$errors.link.title}</span
+          >{/if}
+        <div>
+          <label for="link-url">URL</label>
+          <input
+            type="url"
+            name="link-url"
+            aria-invalid={$errors.link?.url ? "true" : undefined}
+            bind:value={$form.link.url}
+          />
+        </div>
       </div>
-      {#if $errors.link?.title}<span class="form-error"
-          >{$errors.link.title}</span
+      {#if $errors.link?.url}<span class="form-error">{$errors.link.url}</span
         >{/if}
-      <div>
-        <label for="link-url">URL</label>
-        <input
-          type="url"
-          name="link-url"
-          aria-invalid={$errors.link?.url ? "true" : undefined}
-          bind:value={$form.link.url}
-        />
-      </div>
-    </div>
-    {#if $errors.link?.url}<span class="form-error">{$errors.link.url}</span
-      >{/if}
-  </fieldset>
+    </fieldset>
+  {/if}
 
   <p>Resource availability</p>
   {#if $form.availability === "always"}
@@ -149,7 +160,7 @@
       {calendarDates}
     />
     {#if $errors.availability}
-      <span class="form-error">{$errors.availability._errors}</span>
+      <span class="form-error">{$errors.availability.join(", ")}</span>
     {/if}
   {/if}
 

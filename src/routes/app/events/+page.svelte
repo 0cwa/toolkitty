@@ -82,9 +82,8 @@
       return $eventsByDate;
     }
 
-    return $eventsByDate.filter(
-      (group) => group.date === selectedDate.toString(),
-    );
+    const selectedDateString = selectedDate.toString();
+    return $eventsByDate.filter((group) => group.date === selectedDateString);
   });
 </script>
 

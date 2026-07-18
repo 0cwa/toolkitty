@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a focused improvement to Toolkitty
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Toolkitty is prioritizing recovery and core reliability. Explain the user problem first so the proposal can be triaged against the maintenance roadmap.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: Who is affected, and what are they unable to do reliably today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe observable behavior rather than prescribing a large implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include current workarounds or a smaller option.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Calendar and events
+        - Spaces and resources
+        - Access and roles
+        - Peer-to-peer networking
+        - Local data and persistence
+        - Desktop application
+        - Mobile application
+        - Developer experience
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Data, privacy, or compatibility considerations
+      description: Note protocol, migration, security, accessibility, or platform implications.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched for an existing request or maintenance-roadmap entry.
+          required: true
+        - label: I understand this may be deferred while recovery and reliability work is in progress.
+          required: true

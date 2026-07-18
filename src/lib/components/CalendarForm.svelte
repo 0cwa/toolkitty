@@ -5,21 +5,25 @@
 
 <script lang="ts">
   //   import FestivalCalendar from "./FestivalCalendar.svelte";
-  import type { SuperValidated, Infer } from "sveltekit-superforms";
-  import type { CalendarSchema } from "$lib/schemas";
+  import type { SuperValidated } from "sveltekit-superforms";
+  import type { CalendarFormData } from "$lib/schemas";
   import { calendars } from "$lib/api";
   import { toast } from "$lib/toast.svelte";
   import { goto, invalidateAll } from "$app/navigation";
   import { calendarSchema } from "$lib/schemas";
-  import { zod } from "sveltekit-superforms/adapters";
+  import { zod } from "$lib/superforms";
   import { superForm } from "sveltekit-superforms";
   import SuperDebug from "sveltekit-superforms";
 
-  let { data }: { data: SuperValidated<Infer<CalendarSchema>> } = $props();
+  let { data }: { data: SuperValidated<CalendarFormData> } = $props();
 
   let noEndDate = $state(false);
 
-  const { form, errors, enhance } = superForm(data, {
+  function initialFormData() {
+    return data;
+  }
+
+  const { form, errors, enhance } = superForm(initialFormData(), {
     SPA: true,
     validators: zod(calendarSchema),
     resetForm: false,

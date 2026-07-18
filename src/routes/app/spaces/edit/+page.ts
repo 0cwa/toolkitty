@@ -1,9 +1,13 @@
 import type { PageLoad } from "./$types";
-import { spaceSchema } from "$lib/schemas";
+import {
+  normalizeAvailabilityForForm,
+  normalizeLinkForForm,
+  spaceSchema,
+} from "$lib/schemas";
 import { error } from "@sveltejs/kit";
 import { spaces, users, calendars } from "$lib/api";
 import { superValidate } from "sveltekit-superforms";
-import { zod } from "sveltekit-superforms/adapters";
+import { zod } from "$lib/superforms";
 
 export const load: PageLoad = async ({ url, parent }) => {
   const spaceId = url.searchParams.get("id");
@@ -21,8 +25,15 @@ export const load: PageLoad = async ({ url, parent }) => {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { calendarId, ownerId, booked, ...spaceFields } = space;
-  const form = await superValidate(spaceFields, zod(spaceSchema));
+  const { calendarId, ownerId, ...spaceFields } = space;
+  const form = await superValidate(
+    {
+      ...spaceFields,
+      availability: normalizeAvailabilityForForm(spaceFields.availability),
+      link: normalizeLinkForForm(spaceFields.link),
+    },
+    zod(spaceSchema),
+  );
 
   const parentData = await parent();
   const { activeCalendarId, publicKey } = parentData;

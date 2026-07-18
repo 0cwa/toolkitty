@@ -10,9 +10,10 @@
   import ImageGallery from "$lib/components/ImageGallery.svelte";
 
   let { data }: PageProps = $props();
-  let now = new Date();
-  // TODO: look into if this should be declared with `$state(...)` as errors says.
-  let upcomingBookings: Observable<BookingRequestEnriched[]>;
+  const now = new Date().toISOString();
+  let upcomingBookings = $state.raw<
+    Observable<BookingRequestEnriched[]> | undefined
+  >();
   let amOwner = $state(false);
 
   let space = liveQuery(() => {
@@ -47,7 +48,7 @@
   <div class="space-y-4">
     <h1>{$space.name}</h1>
 
-    {#if amOwner}
+    {#if amOwner && upcomingBookings}
       <UpcomingBookings {upcomingBookings} />
     {/if}
 

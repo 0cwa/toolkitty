@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 // Reusable schemas
 const linkSchema = z.object({
@@ -11,7 +11,7 @@ const imageSchema = z.string();
 
 const timeSpanSchema = z.object({
   start: z.string(),
-  end: z.string(),
+  end: z.string().min(1, "End time is required"),
 });
 
 const availabilitySchema = z
@@ -127,3 +127,23 @@ export type ResourceSchema = typeof resourceSchema;
 export type SpaceSchema = typeof spaceSchema;
 export type EventSchema = typeof eventSchema;
 export type CalendarSchema = typeof calendarSchema;
+export type ResourceFormData = z.output<ResourceSchema>;
+export type SpaceFormData = z.output<SpaceSchema>;
+export type EventFormData = z.output<EventSchema>;
+export type CalendarFormData = z.output<CalendarSchema>;
+
+export function normalizeAvailabilityForForm(
+  availability: TimeSpan[] | "always",
+): ResourceFormData["availability"] {
+  if (availability === "always") {
+    return availability;
+  }
+
+  return availability.map(({ start, end }) => ({ start, end: end ?? "" }));
+}
+
+export function normalizeLinkForForm(
+  link?: Link | null,
+): NonNullable<ResourceFormData["link"]> {
+  return link ?? { title: "", type: "custom", url: "" };
+}

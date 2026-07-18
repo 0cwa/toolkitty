@@ -2,8 +2,12 @@ import type { PageLoad } from "./$types";
 import { error } from "@sveltejs/kit";
 import { resources, users, calendars } from "$lib/api";
 import { superValidate } from "sveltekit-superforms";
-import { zod } from "sveltekit-superforms/adapters";
-import { resourceSchema } from "$lib/schemas";
+import { zod } from "$lib/superforms";
+import {
+  normalizeAvailabilityForForm,
+  normalizeLinkForForm,
+  resourceSchema,
+} from "$lib/schemas";
 
 export const load: PageLoad = async ({ url, parent }) => {
   const resourceId = url.searchParams.get("id");
@@ -28,7 +32,14 @@ export const load: PageLoad = async ({ url, parent }) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { calendarId, ownerId, ...resourceFields } = resource;
 
-  const form = await superValidate(resourceFields, zod(resourceSchema));
+  const form = await superValidate(
+    {
+      ...resourceFields,
+      availability: normalizeAvailabilityForForm(resourceFields.availability),
+      link: normalizeLinkForForm(resourceFields.link),
+    },
+    zod(resourceSchema),
+  );
 
   const calendar = await calendars.findById(activeCalendarId!);
   const calendarDates = { start: calendar!.startDate!, end: calendar!.endDate };

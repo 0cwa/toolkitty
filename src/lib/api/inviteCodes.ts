@@ -128,6 +128,8 @@ async function onResponse(response: ResolveInviteCodeResponse) {
     ownerId: stream.owner,
     stream,
     name: response.calendarName,
+    createdAt: BigInt(0),
+    updatedAt: BigInt(0),
   });
 
   // Add ourselves and the calendar owner to the inbox topic log map.

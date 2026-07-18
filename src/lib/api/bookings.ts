@@ -57,16 +57,16 @@ export function findAll(
       const query = db.bookingRequests.where(filter);
 
       if (from) {
+        const fromTimestamp = Date.parse(from);
         query.filter((request) => {
-          const timeSpan = new TimeSpanClass(request.timeSpan);
-          return timeSpan.startDate() >= from;
+          return Date.parse(request.timeSpan.start) >= fromTimestamp;
         });
       }
 
       if (to) {
+        const toTimestamp = Date.parse(to);
         query.filter((request) => {
-          const timeSpan = new TimeSpanClass(request.timeSpan);
-          return timeSpan.startDate() <= to;
+          return Date.parse(request.timeSpan.start) <= toTimestamp;
         });
       }
 

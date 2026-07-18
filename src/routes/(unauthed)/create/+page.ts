@@ -1,7 +1,7 @@
 import type { PageLoad } from "./$types";
 import { calendarSchema } from "$lib/schemas";
 import { defaults } from "sveltekit-superforms";
-import { zod } from "sveltekit-superforms/adapters";
+import { zod } from "$lib/superforms";
 
 export const load: PageLoad = async () => {
   const form = defaults(zod(calendarSchema));

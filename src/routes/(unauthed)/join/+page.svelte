@@ -77,7 +77,7 @@
     </Toggle.Root>
     <button
       class="button bg-blue-light rounded-xl justify-center"
-      on:click={() => join()}>Join</button
+      onclick={() => join()}>Join</button
     >
   {:else}
     <div>

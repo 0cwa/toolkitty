@@ -2,7 +2,7 @@ import type { PageLoad } from "./$types";
 import { spaces, resources, calendars } from "$lib/api";
 import { eventSchema } from "$lib/schemas";
 import { defaults } from "sveltekit-superforms";
-import { zod } from "sveltekit-superforms/adapters";
+import { zod } from "$lib/superforms";
 import { db } from "$lib/db";
 import { TimeSpanClass } from "$lib/timeSpan";
 

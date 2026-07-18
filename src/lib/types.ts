@@ -324,7 +324,7 @@ type Link = {
 
 type TimeSpan = {
   start: ISO8601UTC;
-  end: ISO8601UTC | undefined;
+  end?: ISO8601UTC;
 };
 
 type BookedTimeSpan = TimeSpan & {

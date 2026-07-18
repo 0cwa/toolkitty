@@ -1,0 +1,195 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "24"
+  RUST_TOOLCHAIN: "1.96.0"
+
+jobs:
+  validate-version:
+    name: Validate version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Verify tagged commit is on main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Check manifest and tag versions
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: node scripts/check-version.mjs
+
+  dry-run:
+    name: Dry run (${{ matrix.name }})
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate-version
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            platform: ubuntu-22.04
+            args: ""
+            rust_target: ""
+          - name: macos-aarch64
+            platform: macos-15
+            args: --target aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+          - name: macos-x86_64
+            platform: macos-15
+            args: --target x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+          - name: windows-x86_64
+            platform: windows-2025
+            args: ""
+            rust_target: ""
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "${{ env.RUST_TOOLCHAIN }}" --profile minimal
+          rustup default "${{ env.RUST_TOOLCHAIN }}"
+
+      - name: Install Rust target
+        if: matrix.rust_target != ''
+        run: rustup target add "${{ matrix.rust_target }}"
+
+      - name: Install Tauri system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build unsigned workflow artifacts
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        with:
+          args: ${{ matrix.args }}
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+          uploadWorkflowArtifacts: true
+
+  draft-release:
+    name: Draft release (${{ matrix.name }})
+    if: github.event_name == 'push' && github.repository == '0cwa/toolkitty'
+    needs: validate-version
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 75
+    environment: release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            platform: ubuntu-22.04
+            args: ""
+            rust_target: ""
+          - name: macos-aarch64
+            platform: macos-15
+            args: --target aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+          - name: macos-x86_64
+            platform: macos-15
+            args: --target x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+          - name: windows-x86_64
+            platform: windows-2025
+            args: ""
+            rust_target: ""
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "${{ env.RUST_TOOLCHAIN }}" --profile minimal
+          rustup default "${{ env.RUST_TOOLCHAIN }}"
+
+      - name: Install Rust target
+        if: matrix.rust_target != ''
+        run: rustup target add "${{ matrix.rust_target }}"
+
+      - name: Install Tauri system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build unsigned draft release
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          args: ${{ matrix.args }}
+          generateReleaseNotes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          releaseBody: |
+            Unsigned preview builds generated by CI. These draft artifacts are for maintainer testing and have not been code-signed or notarized.
+          releaseDraft: true
+          releaseName: Toolkitty ${{ github.ref_name }}
+          retryAttempts: 2
+          tagName: ${{ github.ref_name }}
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false

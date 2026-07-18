@@ -9,17 +9,13 @@ import {
   STREAM,
 } from "$lib/utils/faker";
 import { seedTestMessages } from "./data";
+import { setupSeedTestIPC } from "./setup";
 import { bookings, resources, spaces } from "$lib/api";
 import { beforeAll, describe, expect, test } from "vitest";
-import { mockIPC } from "@tauri-apps/api/mocks";
+
+setupSeedTestIPC();
 
 beforeAll(async () => {
-  mockIPC((cmd) => {
-    if (cmd === "public_key") {
-      return OWNER_PUBLIC_KEY;
-    }
-  });
-
   for (const message of seedTestMessages()) {
     await processMessage(message);
   }

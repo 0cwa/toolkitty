@@ -76,8 +76,8 @@ export function findBookings(
 ): Promise<BookingRequest[]> {
   return bookings.findAll({
     resourceId: spaceId,
-    from: timeSpan.startDate(),
-    to: timeSpan.endDate(),
+    from: timeSpan.start,
+    to: timeSpan.end,
     status: "accepted",
   });
 }

@@ -1,5 +1,5 @@
 import type { LayoutLoad } from "./$types";
-import { goto } from "$app/navigation";
+import { redirect } from "@sveltejs/kit";
 import { access } from "$lib/api";
 
 export const load: LayoutLoad = async ({ parent }) => {
@@ -7,20 +7,19 @@ export const load: LayoutLoad = async ({ parent }) => {
   const { publicKey, activeCalendarId } = parentData;
 
   if (!activeCalendarId) {
-    goto("/");
+    redirect(307, "/");
   }
 
   const accessStatus = await access.checkStatus(publicKey, activeCalendarId);
 
   if (accessStatus == "pending") {
     // access status is pending, go to pending page
-    goto("/request");
-    return;
+    redirect(307, "/request");
   }
 
   // TODO: handle rejected state. Where do we go?
 
   return {
-    activeCalendarId: activeCalendarId as string,
+    activeCalendarId,
   };
 };

@@ -66,7 +66,7 @@
 
     <p>{$event.description}</p>
 
-    <Links links={$event.links} />
+    <Links links={$event.links ?? []} />
 
     <ImageGallery images={$event.images} />
 

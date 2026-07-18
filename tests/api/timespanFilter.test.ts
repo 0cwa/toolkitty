@@ -2,20 +2,16 @@
 import "fake-indexeddb/auto";
 
 import { processMessage } from "$lib/processor";
-import { CALENDAR_ID, OWNER_PUBLIC_KEY } from "$lib/utils/faker";
+import { CALENDAR_ID } from "$lib/utils/faker";
 import { seedTestMessages } from "./data";
+import { setupSeedTestIPC } from "./setup";
 import { resources, spaces } from "$lib/api";
 import { beforeAll, describe, expect, test } from "vitest";
-import { mockIPC } from "@tauri-apps/api/mocks";
 import { TimeSpanClass } from "$lib/timeSpan";
 
-beforeAll(async () => {
-  mockIPC((cmd) => {
-    if (cmd === "public_key") {
-      return OWNER_PUBLIC_KEY;
-    }
-  });
+setupSeedTestIPC();
 
+beforeAll(async () => {
   for (const message of seedTestMessages()) {
     await processMessage(message);
   }

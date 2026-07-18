@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Calendar } from "bits-ui";
-  import type { CalendarRootProps } from "bits-ui";
+  import type { CalendarSingleRootProps } from "bits-ui";
   import type { DateValue } from "@internationalized/date";
 
-  type extendedCalendarRootProps = CalendarRootProps & {
+  type ExtendedCalendarRootProps = Omit<CalendarSingleRootProps, "children"> & {
     busyness: {
       date: string;
       eventsList: CalendarEventEnriched[];
@@ -16,7 +16,7 @@
     maxValue,
     value = $bindable(),
     busyness,
-  }: extendedCalendarRootProps = $props();
+  }: ExtendedCalendarRootProps = $props();
 
   /**
    * Busy-ness indicator on highlighted dates

@@ -15,8 +15,8 @@ import {
   NON_OWNER_PUBLIC_KEY,
   OWNER_PUBLIC_KEY,
 } from "$lib/utils/faker";
-import { mockIPC } from "@tauri-apps/api/mocks";
 import { beforeAll, expect, test } from "vitest";
+import { setupTestIPC } from "./setup";
 import {
   access,
   auth,
@@ -118,7 +118,7 @@ const deleteSpace002 = createSpaceMessage(
 );
 const bookingRequest001 = createBookingRequestMessage(
   "booking_request_001",
-  OWNER_PUBLIC_KEY,
+  NON_OWNER_PUBLIC_KEY,
   "resource",
   "resource_001",
   "event_001",
@@ -210,13 +210,9 @@ const messages: ApplicationMessage[] = [
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-beforeAll(async () => {
-  mockIPC(async (cmd) => {
-    if (cmd === "public_key") {
-      return OWNER_PUBLIC_KEY;
-    }
-  });
+setupTestIPC(OWNER_PUBLIC_KEY);
 
+beforeAll(async () => {
   setInterval(async () => {
     for (const [, message] of pendingQueue) {
       await processMessage(message);

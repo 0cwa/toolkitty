@@ -8,7 +8,11 @@
   import CalendarSelector from "$lib/components/CalendarSelector.svelte";
 
   let { data }: PageProps = $props();
-  let requestStatus = $state(data.accessStatus);
+  function initialRequestStatus() {
+    return data.accessStatus;
+  }
+
+  let requestStatus = $state(initialRequestStatus());
   let interval: ReturnType<typeof setInterval>;
 
   async function updateRequestStatus() {

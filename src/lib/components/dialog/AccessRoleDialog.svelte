@@ -13,7 +13,7 @@
     open = $bindable(false),
   }: { data: User | AccessRequest; open: boolean } = $props();
 
-  let isAccessRequest = (data as AccessRequest).from !== undefined;
+  let isAccessRequest = $derived((data as AccessRequest).from !== undefined);
   let publicKey = $derived(
     isAccessRequest ? (data as AccessRequest).from : (data as User).publicKey,
   );

@@ -10,8 +10,8 @@
 
   type Props = { startDate: string; endDate: string };
 
-  const { startDate, endDate }: Props = $props();
-  const isSameDay = startDate.split("T")[0] === endDate.split("T")[0];
+  let { startDate, endDate }: Props = $props();
+  let isSameDay = $derived(startDate.split("T")[0] === endDate.split("T")[0]);
 </script>
 
 {#if isSameDay}

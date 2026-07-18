@@ -16,7 +16,7 @@
 
   let isOpen = $state(true);
 
-  let placeholder = `Select a ${name}`;
+  let placeholder = $derived(`Select a ${name}`);
 </script>
 
 <Select.Root

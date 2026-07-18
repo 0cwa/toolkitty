@@ -3,12 +3,12 @@
   import ImageUploader from "$lib/components/ImageUploader.svelte";
   import { goto } from "$app/navigation";
   import { toast } from "$lib/toast.svelte";
-  import type { SuperValidated, Infer } from "sveltekit-superforms";
-  import type { EventSchema } from "$lib/schemas";
+  import type { SuperValidated } from "sveltekit-superforms";
+  import type { EventFormData } from "$lib/schemas";
   import { superForm, setError } from "sveltekit-superforms";
   import SuperDebug from "sveltekit-superforms";
   import { eventSchema } from "$lib/schemas";
-  import { zod } from "sveltekit-superforms/adapters";
+  import { zod } from "$lib/superforms";
   import { events, resources, bookings } from "$lib/api";
   import { TimeSpanClass } from "$lib/timeSpan";
   import ActionFormButtons from "$lib/components/ActionFormButtons.svelte";
@@ -19,19 +19,31 @@
     currentSpace,
     spaces,
     resourcesList,
-    userRole,
+    userRole = "",
   }: {
-    data: SuperValidated<Infer<EventSchema>>;
+    data: SuperValidated<EventFormData>;
     activeCalendarId: Hash;
     currentSpace?: Space;
     spaces: Space[];
     resourcesList: Resource[];
-    userRole: string;
+    userRole?: string;
   } = $props();
 
-  let selectedSpace = $state<Space | undefined>(currentSpace);
-  let selectedSpaceId = $state<string | undefined>(currentSpace?.id);
-  let availableResources: Resource[] = $state(resourcesList);
+  function initialCurrentSpace() {
+    return currentSpace;
+  }
+
+  function initialResources() {
+    return resourcesList;
+  }
+
+  function initialFormData() {
+    return data;
+  }
+
+  let selectedSpace = $state<Space | undefined>(initialCurrentSpace());
+  let selectedSpaceId = $state<string | undefined>(initialCurrentSpace()?.id);
+  let availableResources: Resource[] = $state(initialResources());
   let selectedResources: Resource[] = $state([]);
   let availableResourceBookings: { resourceId: string; timeSpan: TimeSpan }[] =
     $state([]);
@@ -123,7 +135,7 @@
     }
   }
 
-  const { form, errors, enhance } = superForm(data, {
+  const { form, errors, enhance } = superForm(initialFormData(), {
     SPA: true,
     validators: zod(eventSchema),
     resetForm: false,

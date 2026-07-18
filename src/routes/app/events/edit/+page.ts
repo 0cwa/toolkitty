@@ -3,7 +3,7 @@ import { events, spaces, resources, users } from "$lib/api";
 import { eventSchema } from "$lib/schemas";
 import { error } from "@sveltejs/kit";
 import { superValidate } from "sveltekit-superforms";
-import { zod } from "sveltekit-superforms/adapters";
+import { zod } from "$lib/superforms";
 import { db } from "$lib/db";
 import { TimeSpanClass } from "$lib/timeSpan";
 
@@ -22,11 +22,18 @@ export const load: PageLoad = async ({ parent, url }) => {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { calendarId, ownerId, ...fields } = event;
+  const { calendarId } = event;
+  const currentSpace = event.spaceRequest?.space;
   const eventFields = {
-    selectedSpace: event.space?.id,
-    ...fields,
+    id: event.id,
+    name: event.name,
+    description: event.description,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    publicStartDate: event.publicStartDate ?? "",
+    publicEndDate: event.publicEndDate ?? "",
+    links: event.links,
+    images: event.images,
   };
   const form = await superValidate(eventFields, zod(eventSchema));
 
@@ -47,7 +54,7 @@ export const load: PageLoad = async ({ parent, url }) => {
   return {
     title: "edit space",
     form,
-    currentSpace: event.space,
+    currentSpace,
     calendarId,
     spacesList,
     resourcesList,

@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible Toolkitty problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Toolkitty is pre-release alpha software. Search existing issues first and remove secrets or personal calendar data from logs and screenshots.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release name, commit SHA, or branch where the problem occurs.
+      placeholder: main at abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+        - Android
+        - iOS
+        - Frontend in browser
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment details
+      description: OS version, architecture, and relevant Node/npm/Rust versions.
+      placeholder: Fedora 42, x86_64, Node 24, npm 11
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that triggers the problem.
+      placeholder: |
+        1. Start Toolkitty with ...
+        2. Create ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste short logs as text and remove credentials, invite codes, public/private keys, and personal data.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include frequency, regression information, workarounds, or related issues.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched for an existing report of this problem.
+          required: true
+        - label: This report contains no secrets, private keys, invite codes, or sensitive personal data.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true

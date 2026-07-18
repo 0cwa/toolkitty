@@ -17,17 +17,13 @@ import {
   event001Start,
   seedTestMessages,
 } from "./data";
+import { setupSeedTestIPC } from "./setup";
 import { bookings } from "$lib/api";
 import { beforeEach, expect, test } from "vitest";
-import { mockIPC } from "@tauri-apps/api/mocks";
+
+setupSeedTestIPC();
 
 beforeEach(async () => {
-  mockIPC((cmd) => {
-    if (cmd === "public_key") {
-      return OWNER_PUBLIC_KEY;
-    }
-  });
-
   for (const message of seedTestMessages()) {
     await processMessage(message);
   }
@@ -198,18 +194,27 @@ test("booking queries", async () => {
   // Find all by timespan.
   bookingRequests = await bookings.findAll({
     calendarId: CALENDAR_ID,
-    from: new Date(event001Start),
+    from: event001Start,
   });
   expect(bookingRequests).lengthOf(3);
   bookingRequests = await bookings.findAll({
     calendarId: CALENDAR_ID,
-    from: new Date(event001End),
+    from: event001End,
   });
   expect(bookingRequests).lengthOf(0);
   bookingRequests = await bookings.findAll({
     calendarId: CALENDAR_ID,
-    from: new Date(event001Start),
-    to: new Date(bookingRequest001End),
+    from: event001Start,
+    to: bookingRequest001End,
+  });
+  expect(bookingRequests).lengthOf(2);
+
+  // Equivalent UTC bounds with minute precision include both requests that
+  // start at 10:00:00Z. String ordering would treat these values differently.
+  bookingRequests = await bookings.findAll({
+    calendarId: CALENDAR_ID,
+    from: "2025-03-01T10:00Z",
+    to: "2025-03-01T10:00Z",
   });
   expect(bookingRequests).lengthOf(2);
 
