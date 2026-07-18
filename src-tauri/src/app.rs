@@ -132,7 +132,7 @@ impl Service {
     pub fn run(app_handle: AppHandle) {
         tauri::async_runtime::spawn(async move {
             let app_data_dir = if cfg!(dev) {
-                tempfile::tempdir().expect("temp dir").into_path()
+                tempfile::tempdir().expect("temp dir").keep()
             } else {
                 app_handle
                     .path()
@@ -153,7 +153,7 @@ impl Service {
     #[cfg(test)]
     pub async fn run() -> Arc<RwLock<Context>> {
         let temp_blobs_root_dir = tempfile::tempdir().expect("temp dir");
-        let mut app = Self::build(temp_blobs_root_dir.into_path())
+        let mut app = Self::build(temp_blobs_root_dir.keep())
             .await
             .expect("build stream");
         let context = app.context.clone();
@@ -379,6 +379,9 @@ impl Rpc {
 }
 
 #[derive(Debug, Error)]
+// ChannelEvent is intentionally carried intact so callers retain the failed
+// event; boxing it would change this public error API for a size-only lint.
+#[allow(clippy::large_enum_variant)]
 pub enum RpcError {
     #[error(transparent)]
     StreamController(#[from] p2panda_node::stream::StreamControllerError),
@@ -510,8 +513,8 @@ mod tests {
             .publish_persisted(
                 &serde_json::to_vec(&payload).unwrap(),
                 &stream_args,
-                Some(&log_path),
-                Some(&topic),
+                Some(log_path),
+                Some(topic),
             )
             .await;
 
@@ -566,10 +569,10 @@ mod tests {
         assert!(result.is_ok());
 
         let topic = "some_topic";
-        let result = peer_a.subscribe_ephemeral(&topic).await;
+        let result = peer_a.subscribe_ephemeral(topic).await;
         assert!(result.is_ok());
 
-        let result = peer_b.subscribe_ephemeral(&topic).await;
+        let result = peer_b.subscribe_ephemeral(topic).await;
         assert!(result.is_ok());
 
         let send_payload = json!({
@@ -582,7 +585,7 @@ mod tests {
                 loop {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     let result = peer_a
-                        .publish_ephemeral(&topic, &serde_json::to_vec(&send_payload).unwrap())
+                        .publish_ephemeral(topic, &serde_json::to_vec(&send_payload).unwrap())
                         .await;
                     assert!(result.is_ok());
                 }
@@ -639,8 +642,8 @@ mod tests {
             .publish_persisted(
                 &serde_json::to_vec(&peer_a_payload).unwrap(),
                 &stream_args,
-                Some(&log_path),
-                Some(&topic),
+                Some(log_path),
+                Some(topic),
             )
             .await;
         assert!(result.is_ok());
@@ -650,8 +653,8 @@ mod tests {
 
         let stream_args = StreamArgs {
             id: Some(stream_id),
-            root_hash: Some(operation_id.clone()),
-            owner: Some(peer_a_public_key.clone()),
+            root_hash: Some(operation_id),
+            owner: Some(peer_a_public_key),
         };
 
         let peer_b_payload = json!({
@@ -663,8 +666,8 @@ mod tests {
             .publish_persisted(
                 &serde_json::to_vec(&peer_b_payload).unwrap(),
                 &stream_args,
-                Some(&log_path),
-                Some(&topic),
+                Some(log_path),
+                Some(topic),
             )
             .await;
         assert!(result.is_ok());
@@ -674,30 +677,30 @@ mod tests {
             root_hash: operation_id.into(),
             owner: peer_a_public_key.into(),
         };
-        let log_id = LogId(format!("{}/{}", stream.id(), log_path.to_string()));
+        let log_id = LogId(format!("{}/{}", stream.id(), log_path));
 
         peer_a
-            .add_topic_log(&peer_a_public_key, &topic, &log_id)
+            .add_topic_log(&peer_a_public_key, topic, &log_id)
             .await
             .unwrap();
         peer_a
-            .add_topic_log(&peer_b_public_key, &topic, &log_id)
+            .add_topic_log(&peer_b_public_key, topic, &log_id)
             .await
             .unwrap();
 
         peer_b
-            .add_topic_log(&peer_a_public_key, &topic, &log_id)
+            .add_topic_log(&peer_a_public_key, topic, &log_id)
             .await
             .unwrap();
         peer_b
-            .add_topic_log(&peer_b_public_key, &topic, &log_id)
+            .add_topic_log(&peer_b_public_key, topic, &log_id)
             .await
             .unwrap();
 
         // Finally they both subscribe to the topic.
-        let result = peer_a.subscribe_persisted(&topic).await;
+        let result = peer_a.subscribe_persisted(topic).await;
         assert!(result.is_ok());
-        let result = peer_b.subscribe_persisted(&topic).await;
+        let result = peer_b.subscribe_persisted(topic).await;
         assert!(result.is_ok());
 
         // Peer A should receive Peer B's message via sync.

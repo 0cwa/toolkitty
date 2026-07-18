@@ -20,6 +20,7 @@ futures-util = "0.3.31"
 hex = "0.4.3"
 iroh-io = "0.6.1"
 mime = "0.3.17"
+socket2 = { version = "0.5.10", features = ["all"] }
 experimental-node = { git = "https://github.com/p2panda/experimental-node", rev = "e5006c8cf573ee4a5882bd0c71a57b6435aa9483" }
 p2panda-blobs = { git = "https://github.com/p2panda/p2panda", rev = "79b7682deb5f253224745b7ad9a7faab90e89e87" }
 p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "79b7682deb5f253224745b7ad9a7faab90e89e87" }
