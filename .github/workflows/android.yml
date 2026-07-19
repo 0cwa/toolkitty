@@ -51,9 +51,15 @@ jobs:
             src-tauri/gen/android/app/*.gradle*
             src-tauri/gen/android/buildSrc/*.gradle*
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: ""
+          log-accepted-android-sdk-licenses: "false"
+
       - name: Install Android SDK and NDK
         run: |
-          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          sdkmanager="$(command -v sdkmanager)"
           test -x "${sdkmanager}"
           "${sdkmanager}" --install \
             "platforms;android-${ANDROID_API_LEVEL}" \
