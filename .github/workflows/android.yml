@@ -53,7 +53,7 @@ jobs:
 
       - name: Install Android SDK and NDK
         run: |
-          sdkmanager --install \
+          yes | sdkmanager --install \
             "platforms;android-${ANDROID_API_LEVEL}" \
             "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
             "ndk;${ANDROID_NDK_VERSION}"
