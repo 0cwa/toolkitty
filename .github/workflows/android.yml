@@ -134,6 +134,7 @@ jobs:
 
           unzip -q "${apk}" 'lib/*.so' -d "${verification_dir}/apk"
           llvm_objdump="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump"
+          # Android's 16 KiB page-size requirement applies to 64-bit devices.
           library_count=0
           while IFS= read -r -d '' library; do
             library_count=$((library_count + 1))
@@ -152,7 +153,12 @@ jobs:
               "${llvm_objdump}" -p "${library}" | awk '$1 == "LOAD"'
               exit 1
             fi
-          done < <(find "${verification_dir}/apk/lib" -type f -name '*.so' -print0)
+          done < <(
+            find \
+              "${verification_dir}/apk/lib/arm64-v8a" \
+              "${verification_dir}/apk/lib/x86_64" \
+              -type f -name '*.so' -print0
+          )
 
           if (( library_count == 0 )); then
             echo "APK contains no native libraries" >&2
