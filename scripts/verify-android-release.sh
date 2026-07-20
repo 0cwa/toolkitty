@@ -197,10 +197,66 @@ verify_apk_signature() {
 verify_aab_signature() {
   local signature_output="$temporary_dir/aab-signature.txt"
   local certificate_output="$temporary_dir/aab-certificate.txt"
+  local certificate_pem_output="$temporary_dir/aab-certificate-rfc.txt"
+  local certificate_pem="$temporary_dir/aab-certificate.pem"
+  local certificate_verify_output="$temporary_dir/aab-certificate-verify.txt"
+  local truststore="$temporary_dir/aab-truststore.p12"
   local -a fingerprints=()
-  local jarsigner_status
+  local jarsigner_status pem_begin_count pem_end_count pem_fingerprint
+  local truststore_password
 
-  if LC_ALL=C jarsigner -verify -strict -verbose -certs "$aab_path" \
+  LC_ALL=C keytool -printcert -jarfile "$aab_path" >"$certificate_output" 2>&1 ||
+    die "could not read the AAB signing certificate"
+  mapfile -t fingerprints < <(
+    awk -F': ' '/SHA256:/ { print $2 }' "$certificate_output" |
+      while IFS= read -r fingerprint; do
+        normalize_fingerprint "$fingerprint"
+        printf '\n'
+      done |
+      LC_ALL=C sort -u
+  )
+  ((${#fingerprints[@]} == 1)) || die "AAB does not have exactly one signing certificate"
+  [[ "${fingerprints[0]}" == "$expected_cert_sha256" ]] ||
+    die "AAB signing certificate fingerprint does not match"
+
+  LC_ALL=C keytool -printcert -rfc -jarfile "$aab_path" \
+    >"$certificate_pem_output" 2>&1 ||
+    die "could not export the AAB signing certificate"
+  pem_begin_count=$(grep -c '^-----BEGIN CERTIFICATE-----$' "$certificate_pem_output" || true)
+  pem_end_count=$(grep -c '^-----END CERTIFICATE-----$' "$certificate_pem_output" || true)
+  [[ "$pem_begin_count" == 1 && "$pem_end_count" == 1 ]] ||
+    die "AAB does not contain exactly one PEM signing certificate"
+  awk '
+    /^-----BEGIN CERTIFICATE-----$/ { in_certificate = 1 }
+    in_certificate { print }
+    /^-----END CERTIFICATE-----$/ { in_certificate = 0 }
+  ' "$certificate_pem_output" >"$certificate_pem"
+  if ! pem_fingerprint=$(LC_ALL=C openssl x509 -in "$certificate_pem" \
+    -noout -fingerprint -sha256); then
+    die "could not inspect the AAB PEM signing certificate"
+  fi
+  pem_fingerprint=$(normalize_fingerprint "${pem_fingerprint#*=}")
+  [[ "$pem_fingerprint" == "$expected_cert_sha256" ]] ||
+    die "AAB PEM signing certificate fingerprint does not match"
+  LC_ALL=C openssl verify -CAfile "$certificate_pem" "$certificate_pem" \
+    >"$certificate_verify_output" 2>&1 ||
+    die "AAB signing certificate is expired, not yet valid, or invalid"
+
+  truststore_password=$(openssl rand -hex 32) ||
+    die "could not create an AAB truststore password"
+  AAB_PUBLIC_TRUSTSTORE_PASSWORD=$truststore_password LC_ALL=C keytool \
+    -importcert -noprompt -storetype PKCS12 \
+    -keystore "$truststore" \
+    -storepass:env AAB_PUBLIC_TRUSTSTORE_PASSWORD \
+    -alias toolkitty-aab-signer \
+    -file "$certificate_pem" >/dev/null 2>&1 ||
+    die "could not create the AAB public truststore"
+
+  if AAB_PUBLIC_TRUSTSTORE_PASSWORD=$truststore_password LC_ALL=C \
+    jarsigner -verify -strict -verbose -certs \
+    -keystore "$truststore" \
+    -storepass:env AAB_PUBLIC_TRUSTSTORE_PASSWORD \
+    "$aab_path" \
     >"$signature_output" 2>&1; then
     jarsigner_status=0
   else
@@ -226,19 +282,6 @@ verify_aab_signature() {
   fi
   grep -Eq '^jar verified(, with signer errors)?[.]$' "$signature_output" ||
     die "AAB is not a verified signed JAR"
-  LC_ALL=C keytool -printcert -jarfile "$aab_path" >"$certificate_output" 2>&1 ||
-    die "could not read the AAB signing certificate"
-  mapfile -t fingerprints < <(
-    awk -F': ' '/SHA256:/ { print $2 }' "$certificate_output" |
-      while IFS= read -r fingerprint; do
-        normalize_fingerprint "$fingerprint"
-        printf '\n'
-      done |
-      LC_ALL=C sort -u
-  )
-  ((${#fingerprints[@]} == 1)) || die "AAB does not have exactly one signing certificate"
-  [[ "${fingerprints[0]}" == "$expected_cert_sha256" ]] ||
-    die "AAB signing certificate fingerprint does not match"
 }
 
 verify_apk_metadata() {
@@ -294,7 +337,7 @@ expected_cert_sha256=$(normalize_fingerprint "$6")
 
 [[ -f "$apk_path" && -r "$apk_path" ]] || die "APK is not a readable regular file"
 [[ -f "$aab_path" && -r "$aab_path" ]] || die "AAB is not a readable regular file"
-for command_name in awk diff find grep jarsigner keytool mktemp realpath sort tr unzip; do
+for command_name in awk diff find grep jarsigner keytool mktemp openssl realpath sort tr unzip; do
   require_command "$command_name"
 done
 apk_path=$(realpath -- "$apk_path")
