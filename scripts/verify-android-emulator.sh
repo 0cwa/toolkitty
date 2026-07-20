@@ -29,7 +29,7 @@ if ((${#apks[@]} != 1)); then
 fi
 
 adb logcat -c
-adb install --replace "${apks[0]}"
+adb install -r "${apks[0]}"
 launch_output="$(adb shell am start -W -n "$package_id/.MainActivity")"
 printf '%s\n' "$launch_output"
 grep -Fq 'Status: ok' <<<"$launch_output"
