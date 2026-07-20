@@ -21,7 +21,15 @@ open class BuildTask : DefaultTask() {
             runTauriCli(executable)
         } catch (e: Exception) {
             if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                runTauriCli("$executable.cmd")
+                try {
+                    runTauriCli("$executable.exe")
+                } catch (_: Exception) {
+                    try {
+                        runTauriCli("$executable.cmd")
+                    } catch (_: Exception) {
+                        runTauriCli("$executable.bat")
+                    }
+                }
             } else {
                 throw e;
             }
