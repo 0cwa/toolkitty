@@ -200,21 +200,22 @@ verify_aab_signature() {
   local -a fingerprints=()
   local jarsigner_status
 
-  set +e
-  LC_ALL=C jarsigner -verify -strict -verbose -certs "$aab_path" \
-    >"$signature_output" 2>&1
-  jarsigner_status=$?
-  set -e
+  if LC_ALL=C jarsigner -verify -strict -verbose -certs "$aab_path" \
+    >"$signature_output" 2>&1; then
+    jarsigner_status=0
+  else
+    jarsigner_status=$?
+  fi
 
   # JDKs reuse strict-warning bits. Reject every structural, algorithm, and
   # certificate-usage bit; code 4 is allowed only for the expected self-signed
-  # distribution certificate/chain warning and is inspected textually below.
+  # distribution certificate warning and is inspected textually below.
   if ((jarsigner_status & 1 || jarsigner_status & 8 || jarsigner_status & 16 ||
     jarsigner_status & 32 || jarsigner_status & 64)); then
     die "AAB signature verification reported a disallowed signer error"
   fi
   if grep -Eqi \
-    'unsigned entries|treated as unsigned|algorithm.*disabled|disabled algorithm|certificate.*expired|not yet valid|KeyUsage extension|ExtendedKeyUsage|NetscapeCertType|timestamp.*(expired|invalid)' \
+    'unsigned entries|treated as unsigned|algorithm.*disabled|disabled algorithm|certificate chain.*(invalid|not validated|isn.t validated)|certificate.*expired|not yet valid|KeyUsage extension|ExtendedKeyUsage|NetscapeCertType|timestamp.*(expired|invalid)' \
     "$signature_output"; then
     die "AAB signature verification reported an integrity or certificate error"
   fi
