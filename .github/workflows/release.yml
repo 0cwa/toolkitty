@@ -1,22 +1,31 @@
-name: Desktop release
+name: Release
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Build artifacts for the selected platform scope
+        required: true
+        default: all
+        type: choice
+        options: [android, desktop, all]
 
 permissions: {}
-
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
-
 env:
+  ANDROID_API_LEVEL: "36"
+  ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
+  ANDROID_NDK_VERSION: "29.0.13846066"
+  BUNDLETOOL_SHA256: a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29
+  BUNDLETOOL_VERSION: "1.18.3"
   CARGO_TERM_COLOR: always
   NODE_VERSION: "24"
   RUST_TOOLCHAIN: "1.96.0"
-
 jobs:
   validate-version:
     name: Validate version
@@ -24,33 +33,47 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      version_code: ${{ steps.metadata.outputs.version_code }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-
+          persist-credentials: false
       - name: Verify tagged commit is on main
         if: github.event_name == 'push'
         run: |
           git fetch --no-tags origin \
             "+refs/heads/main:refs/remotes/origin/main"
           git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
-
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
-
       - name: Check manifest and tag versions
         env:
           RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
         run: node scripts/check-version.mjs
-
-  dry-run:
-    name: Dry run (${{ matrix.name }})
-    if: github.event_name == 'workflow_dispatch'
+      - name: Export release metadata
+        id: metadata
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          version_code="$(node -p "require('./src-tauri/tauri.conf.json').bundle.android.versionCode")"
+          test -n "${version}"
+          [[ "${version_code}" =~ ^[1-9][0-9]*$ ]]
+          {
+            echo "version=${version}"
+            echo "version_code=${version_code}"
+          } >> "${GITHUB_OUTPUT}"
+  build-desktop:
+    name: Unsigned desktop (${{ matrix.name }})
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.scope == 'desktop' ||
+      github.event.inputs.scope == 'all'
     needs: validate-version
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 75
@@ -64,21 +87,27 @@ jobs:
             platform: ubuntu-22.04
             args: ""
             rust_target: ""
+            bundle_root: src-tauri/target/release/bundle
           - name: macos-aarch64
             platform: macos-15
             args: --target aarch64-apple-darwin
             rust_target: aarch64-apple-darwin
+            bundle_root: src-tauri/target/aarch64-apple-darwin/release/bundle
           - name: macos-x86_64
             platform: macos-15
             args: --target x86_64-apple-darwin
             rust_target: x86_64-apple-darwin
+            bundle_root: src-tauri/target/x86_64-apple-darwin/release/bundle
           - name: windows-x86_64
             platform: windows-2025
             args: ""
             rust_target: ""
+            bundle_root: src-tauri/target/release/bundle
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -87,12 +116,14 @@ jobs:
           cache: npm
 
       - name: Install Rust toolchain
+        shell: bash
         run: |
-          rustup toolchain install "${{ env.RUST_TOOLCHAIN }}" --profile minimal
-          rustup default "${{ env.RUST_TOOLCHAIN }}"
+          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
+          rustup default "${RUST_TOOLCHAIN}"
 
       - name: Install Rust target
         if: matrix.rust_target != ''
+        shell: bash
         run: rustup target add "${{ matrix.rust_target }}"
 
       - name: Install Tauri system dependencies
@@ -107,89 +138,362 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+      - name: Build unsigned desktop bundles
+        env:
+          CI: "true"
+        run: npm run tauri -- build ${{ matrix.args }}
 
-      - name: Build unsigned workflow artifacts
-        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+      - name: Stage deterministic Unix desktop assets
+        if: runner.os != 'Windows'
+        env:
+          BUNDLE_ROOT: ${{ matrix.bundle_root }}
+          PLATFORM_NAME: ${{ matrix.name }}
+          VERSION: ${{ needs.validate-version.outputs.version }}
+        run: |
+          mkdir -p release-assets
+          asset_count=0
+          while IFS= read -r -d '' source; do
+            case "${source}" in
+              *.AppImage) suffix="AppImage" ;;
+              *.deb) suffix="deb" ;;
+              *.dmg) suffix="dmg" ;;
+              *.rpm) suffix="rpm" ;;
+              *) continue ;;
+            esac
+            destination="release-assets/toolkitty-v${VERSION}-${PLATFORM_NAME}-unsigned.${suffix}"
+            if [[ -e "${destination}" ]]; then
+              echo "Duplicate desktop asset destination: ${destination}" >&2
+              exit 1
+            fi
+            cp "${source}" "${destination}"
+            asset_count=$((asset_count + 1))
+          done < <(find "${BUNDLE_ROOT}" -type f -print0)
+          if (( asset_count == 0 )); then
+            echo "No releasable desktop bundles found under ${BUNDLE_ROOT}" >&2
+            exit 1
+          fi
+
+      - name: Stage deterministic Windows desktop assets
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          BUNDLE_ROOT: ${{ matrix.bundle_root }}
+          PLATFORM_NAME: ${{ matrix.name }}
+          VERSION: ${{ needs.validate-version.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $assets = Get-ChildItem -Path $env:BUNDLE_ROOT -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.msi' }
+          if ($assets.Count -eq 0) {
+            throw "No releasable desktop bundles found under $env:BUNDLE_ROOT"
+          }
+          foreach ($source in $assets) {
+            $suffix = $source.Extension.ToLowerInvariant()
+            $destination = Join-Path release-assets "toolkitty-v$env:VERSION-$env:PLATFORM_NAME-unsigned$suffix"
+            if (Test-Path $destination) {
+              throw "Duplicate desktop asset destination: $destination"
+            }
+            Copy-Item -LiteralPath $source.FullName -Destination $destination
+          }
+
+      - name: Upload unsigned desktop artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          args: ${{ matrix.args }}
-          uploadUpdaterJson: false
-          uploadUpdaterSignatures: false
-          uploadWorkflowArtifacts: true
+          name: release-unsigned-desktop-${{ matrix.name }}-v${{ needs.validate-version.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
 
-  draft-release:
-    name: Draft release (${{ matrix.name }})
-    if: github.event_name == 'push' && github.repository == '0cwa/toolkitty'
+  build-android:
+    name: Signed Android
+    if: >-
+      github.repository == '0cwa/toolkitty' &&
+      (github.event_name == 'push' ||
+      github.event.inputs.scope == 'android' ||
+      github.event.inputs.scope == 'all')
     needs: validate-version
-    runs-on: ${{ matrix.platform }}
-    timeout-minutes: 75
-    environment: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: android-release
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            src-tauri/gen/android/*.gradle*
+            src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+            src-tauri/gen/android/app/*.gradle*
+            src-tauri/gen/android/buildSrc/*.gradle*
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: ""
+          log-accepted-android-sdk-licenses: "false"
+      - name: Install Android SDK, NDK, and bundletool
+        run: |
+          sdkmanager="$(command -v sdkmanager)"
+          test -x "${sdkmanager}"
+          "${sdkmanager}" --install \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
+            "ndk;${ANDROID_NDK_VERSION}"
+
+          android_ndk_home="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          test -x "${android_ndk_home}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump"
+
+          bundletool_jar="${RUNNER_TEMP}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          curl --fail --location --retry 3 --show-error --silent \
+            --output "${bundletool_jar}" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          printf '%s  %s\n' "${BUNDLETOOL_SHA256}" "${bundletool_jar}" | sha256sum --check --strict
+
+          {
+            echo "ANDROID_NDK=${android_ndk_home}"
+            echo "ANDROID_NDK_HOME=${android_ndk_home}"
+            echo "ANDROID_NDK_ROOT=${android_ndk_home}"
+            echo "BUNDLETOOL_JAR=${bundletool_jar}"
+            echo "NDK_HOME=${android_ndk_home}"
+          } >> "${GITHUB_ENV}"
+      - name: Install Rust toolchain and Android targets
+        run: |
+          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
+          rustup default "${RUST_TOOLCHAIN}"
+          rustup target add \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            x86_64-linux-android
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build unsigned universal APK and AAB
+        run: >-
+          npm run tauri -- android build
+          --ci
+          --apk
+          --aab
+          --target aarch64 armv7 x86_64
+      - name: Sign Android artifacts with protected identity
+        env:
+          ANDROID_SIGNING_KEY_ALIAS: ${{ vars.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_BASE64: ${{ secrets.ANDROID_SIGNING_KEY_BASE64 }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          umask 077
+          signing_store="${RUNNER_TEMP}/toolkitty-distribution.jks"
+          trap 'rm -f -- "${signing_store}"' EXIT
+          test -n "${ANDROID_SIGNING_KEY_ALIAS}" && test -n "${EXPECTED_CERT_SHA256}"
+          printf '%s' "${ANDROID_SIGNING_KEY_BASE64}" | base64 --decode > "${signing_store}"
+          test -s "${signing_store}"
+
+          expected_cert="$(printf '%s' "${EXPECTED_CERT_SHA256}" | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          [[ "${expected_cert}" =~ ^[0-9A-F]{64}$ ]]
+          actual_cert="$(LC_ALL=C keytool -list -v -keystore "${signing_store}" \
+            -storepass:env ANDROID_SIGNING_STORE_PASSWORD -alias "${ANDROID_SIGNING_KEY_ALIAS}" | \
+            awk -F': ' '/SHA256:/ {print $2}' | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          test "${actual_cert}" = "${expected_cert}"
+
+          mapfile -t apks < <(find src-tauri/gen/android/app/build/outputs/apk -type f -iname '*universal*release*.apk' -print)
+          mapfile -t aabs < <(find src-tauri/gen/android/app/build/outputs/bundle -type f -iname '*release*.aab' -print)
+          (( ${#apks[@]} == 1 && ${#aabs[@]} == 1 ))
+          signed_apk="${RUNNER_TEMP}/toolkitty-android-signed.apk"
+          signed_aab="${RUNNER_TEMP}/toolkitty-android-signed.aab"
+          build_tools="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS_VERSION}"
+          "${build_tools}/zipalign" -P 16 -f 4 "${apks[0]}" "${signed_apk}"
+          "${build_tools}/apksigner" sign --ks "${signing_store}" \
+            --ks-key-alias "${ANDROID_SIGNING_KEY_ALIAS}" \
+            --ks-pass env:ANDROID_SIGNING_STORE_PASSWORD \
+            --key-pass env:ANDROID_SIGNING_KEY_PASSWORD "${signed_apk}"
+          cp "${aabs[0]}" "${signed_aab}"
+          jarsigner -keystore "${signing_store}" \
+            -storepass:env ANDROID_SIGNING_STORE_PASSWORD \
+            -keypass:env ANDROID_SIGNING_KEY_PASSWORD \
+            "${signed_aab}" "${ANDROID_SIGNING_KEY_ALIAS}"
+          {
+            echo "SIGNED_APK_PATH=${signed_apk}"
+            echo "SIGNED_AAB_PATH=${signed_aab}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify and stage signed Android artifacts
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION_CODE: ${{ needs.validate-version.outputs.version_code }}
+        run: |
+          bash scripts/verify-android-release.sh \
+            "${SIGNED_APK_PATH}" \
+            "${SIGNED_AAB_PATH}" \
+            com.toolkitty.app \
+            "${VERSION}" \
+            "${VERSION_CODE}" \
+            "${EXPECTED_CERT_SHA256}"
+
+          mkdir -p release-assets
+          cp "${SIGNED_APK_PATH}" "release-assets/toolkitty-v${VERSION}-android-universal-signed.apk"
+          cp "${SIGNED_AAB_PATH}" "release-assets/toolkitty-v${VERSION}-android-signed.aab"
+
+      - name: Upload signed Android artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-signed-android-v${{ needs.validate-version.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-android-emulator:
+    name: Verify signed Android on API 36 emulator
+    needs: [validate-version, build-android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Download signed Android artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-signed-android-v${{ needs.validate-version.outputs.version }}
+          path: android-assets
+
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and launch signed APK
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          script: bash scripts/verify-android-emulator.sh android-assets com.toolkitty.app
+
+  prepare-release:
+    name: Prepare and attest release
+    if: github.event_name == 'push' && github.repository == '0cwa/toolkitty'
+    needs: [validate-version, build-desktop, build-android, verify-android-emulator]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Validate assets and generate SHA256SUMS
+        run: |
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print)
+          if (( ${#assets[@]} < 3 )); then
+            printf 'Expected Android and desktop release assets, found %d.\n' "${#assets[@]}" >&2
+            printf '%s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' |
+              LC_ALL=C sort -z |
+              xargs -0 sha256sum
+          ) > release-assets/SHA256SUMS
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: release-assets/*
+
+      - name: Upload release-ready artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-ready-v${{ needs.validate-version.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-draft:
+    name: Publish draft release
+    if: github.event_name == 'push' && github.repository == '0cwa/toolkitty'
+    needs: [validate-version, prepare-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux-x86_64
-            platform: ubuntu-22.04
-            args: ""
-            rust_target: ""
-          - name: macos-aarch64
-            platform: macos-15
-            args: --target aarch64-apple-darwin
-            rust_target: aarch64-apple-darwin
-          - name: macos-x86_64
-            platform: macos-15
-            args: --target x86_64-apple-darwin
-            rust_target: x86_64-apple-darwin
-          - name: windows-x86_64
-            platform: windows-2025
-            args: ""
-            rust_target: ""
     steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - name: Download release-ready artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          name: release-ready-v${{ needs.validate-version.outputs.version }}
+          path: release-assets
 
-      - name: Install Rust toolchain
-        run: |
-          rustup toolchain install "${{ env.RUST_TOOLCHAIN }}" --profile minimal
-          rustup default "${{ env.RUST_TOOLCHAIN }}"
-
-      - name: Install Rust target
-        if: matrix.rust_target != ''
-        run: rustup target add "${{ matrix.rust_target }}"
-
-      - name: Install Tauri system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libwebkit2gtk-4.1-dev \
-            patchelf
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build unsigned draft release
-        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+      - name: Create or update the draft prerelease
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          args: ${{ matrix.args }}
-          generateReleaseNotes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          releaseBody: |
-            Unsigned preview builds generated by CI. These draft artifacts are for maintainer testing and have not been code-signed or notarized.
-          releaseDraft: true
-          releaseName: Toolkitty ${{ github.ref_name }}
-          retryAttempts: 2
-          tagName: ${{ github.ref_name }}
-          uploadUpdaterJson: false
-          uploadUpdaterSignatures: false
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cat > "${RUNNER_TEMP}/release-notes.md" <<'NOTES'
+          ## Artifact trust
+
+          - Android APK and AAB artifacts are signed with Toolkitty's protected Android distribution identity.
+          - Desktop artifacts are explicitly marked `unsigned`; they are not code-signed or notarized.
+          - Verify downloads with `SHA256SUMS` and GitHub artifact attestations before installing them.
+
+          ## Android alpha limitations
+
+          P2P networking is foreground-oriented in this alpha. Background synchronization does not yet have a foreground-service and battery-policy design.
+
+          The native identity key is not yet protected by Android Keystore. Android backup is disabled to reduce unintended key exposure. Treat this alpha as testing software while identity storage, persistence validation, authorization, and encrypted access-request handling are hardened.
+          NOTES
+
+          prerelease=false
+          if [[ "${RELEASE_TAG}" == *-* ]]; then
+            prerelease=true
+          fi
+
+          if existing_draft="$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "${existing_draft}" != "true" ]]; then
+              echo "Refusing to replace non-draft release ${RELEASE_TAG}." >&2
+              exit 1
+            fi
+            gh release edit "${RELEASE_TAG}" \
+              --draft \
+              --prerelease="${prerelease}" \
+              --title "Toolkitty ${RELEASE_TAG}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --verify-tag \
+              --draft \
+              --generate-notes \
+              --prerelease="${prerelease}" \
+              --title "Toolkitty ${RELEASE_TAG}" \
+              --notes-file "${RUNNER_TEMP}/release-notes.md"
+          fi
+
+          gh release upload "${RELEASE_TAG}" release-assets/* --clobber
