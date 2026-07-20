@@ -24,7 +24,7 @@ env:
 
 jobs:
   android:
-    name: Build, lint, and verify
+    name: Android
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
